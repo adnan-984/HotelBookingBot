@@ -1,0 +1,148 @@
+import json
+import logging
+
+#logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def validate(slots):
+    if not slots.get('Location'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'Location'
+        }
+    if not slots.get('CheckInDate'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'CheckInDate'
+        }
+    if not slots.get('Nights'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'Nights'
+        }
+    if not slots.get('RoomType'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'RoomType'
+        }
+    if not slots.get('FirstName'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'FirstName'
+        }
+    if not slots.get('LastName'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'LastName'
+        }
+    if not slots.get('PhoneNumber'):
+        return {
+            'isValid': False,
+            'violatedSlot': 'PhoneNumber'
+        }
+    return {'isValid': True}
+
+def lambda_handler(event, context):
+    logger.info("Event: %s", json.dumps(event, indent=2))
+
+    # Check and initialize sessionState if missing
+    if 'sessionState' not in event:
+        event['sessionState'] = {
+            "dialogAction": {
+                "type": "Delegate"
+            },
+            "intent": {
+                "name": "UnknownIntent",
+                "slots": {}
+            },
+            "sessionAttributes": {}
+        }
+
+    if 'intent' not in event['sessionState']:
+        event['sessionState']['intent'] = {
+            "name": "UnknownIntent",
+            "slots": {}
+        }
+
+    if 'slots' not in event['sessionState']['intent']:
+        event['sessionState']['intent']['slots'] = {}
+
+    # Set default invocationSource if missing
+    invocation_source = event.get('invocationSource', 'None')
+    slots = event['sessionState']['intent']['slots']
+    intent = event['sessionState']['intent']['name']
+
+    logger.info("Invocation Source: %s", invocation_source)
+    logger.info("Slots: %s", json.dumps(slots))
+    logger.info("Intent: %s", intent)
+
+    validation_result = validate(slots)
+    logger.info("Validation Result: %s", json.dumps(validation_result))
+
+    if invocation_source == 'DialogCodeHook':
+        if not validation_result['isValid']:
+            response = {
+                "sessionState": {
+                    "dialogAction": {
+                        "slotToElicit": validation_result['violatedSlot'],
+                        "type": "ElicitSlot"
+                    },
+                    "intent": {
+                        'name': intent,
+                        'slots': slots
+                    }
+                }
+            }
+        else:
+            response = {
+                "sessionState": {
+                    "dialogAction": {
+                        "type": "Delegate"
+                    },
+                    "intent": {
+                        'name': intent,
+                        'slots': slots  
+                    }
+                }
+            }
+    elif invocation_source == 'FulfillmentCodeHook':
+        response = {
+            "sessionState": {
+                "dialogAction": {
+                    "type": "Close"
+                },
+                "intent": {
+                    'name': intent,
+                    'slots': slots,
+                    'state': 'Fulfilled'
+                }
+            },
+            "messages": [
+                {
+                    "contentType": "PlainText",
+                    "content": "Your request was carried out successfully."
+                }
+            ]
+        }
+    else:
+        # Handle unexpected invocation sources
+        response = {
+            "sessionState": {
+                "dialogAction": {
+                    "type": "Close"
+                },
+                "intent": {
+                    'name': intent,
+                    'slots': slots,
+                    'state': 'Failed'
+                }
+            },
+            "messages": [
+                {
+                    "contentType": "PlainText",
+                    "content": f"An error occurred: unexpected invocation source '{invocation_source}'."
+                }
+            ]
+        }
+
+    return response
